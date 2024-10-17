@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Interactive Vehicle Statistics Visualization</title>
     <style>
+        /* Previous styles remain the same */
         body {
             font-family: Arial, sans-serif;
             margin: 0;
@@ -163,28 +164,30 @@
     </div>
     <div id="legend" class="legend"></div>
     
-
     <div class="chart-container">
         <div id="chart"></div>
     </div>
+
     <script>
         // Load the data
         d3.csv("app/static/vehicle.csv").then(data => {
-            // Process and filter the data
-            const processedData = data.map(d => ({
-                year: d['總計'],
-                displayYear: d['總計'].replace(/^(\d+)年.*$/, '$1'),
-                yearNumber: parseInt(d['總計'].match(/^(\d+)/)[1]),
-                car: +d['汽車'].replace(/,/g, ''),
-                bus: +d['大客車'].replace(/,/g, ''),
-                truck: +d['大貨車'].replace(/,/g, ''),
-                privatecar: +d['小客車'].replace(/,/g, ''),
-                van: +d['小貨車'].replace(/,/g, ''),
-                special: +d['特種車'].replace(/,/g, ''),
-                motorcycle: +d['機車'].replace(/,/g, '')
-            })).sort((a, b) => a.yearNumber - b.yearNumber);
+            // Process and filter the data, excluding year 113
+            const processedData = data
+                .filter(d => !d['總計'].startsWith('113')) // Filter out data from year 113
+                .map(d => ({
+                    year: d['總計'],
+                    displayYear: d['總計'].replace(/^(\d+)年.*$/, '$1'),
+                    yearNumber: parseInt(d['總計'].match(/^(\d+)/)[1]),
+                    car: +d['汽車'].replace(/,/g, ''),
+                    bus: +d['大客車'].replace(/,/g, ''),
+                    truck: +d['大貨車'].replace(/,/g, ''),
+                    privatecar: +d['小客車'].replace(/,/g, ''),
+                    van: +d['小貨車'].replace(/,/g, ''),
+                    special: +d['特種車'].replace(/,/g, ''),
+                    motorcycle: +d['機車'].replace(/,/g, '')
+                })).sort((a, b) => a.yearNumber - b.yearNumber);
 
-            // Combine data for the same year
+            // Rest of the code remains the same
             const combinedData = Array.from(d3.group(processedData, d => d.yearNumber))
                 .map(([year, values]) => {
                     const combined = {
@@ -215,13 +218,13 @@
             // Define color mapping with default order
             const defaultOrder = ["car", "bus", "truck", "privatecar", "van", "special", "motorcycle"];
             const colorMapping = {
-                "car": "#F7F0F5",
-                "bus": "#DECBB7",
-                "truck": "#B89A8E",
-                "privatecar": "#8F857D",
-                "van": "#5C5552",
-                "special": "#433633",
-                "motorcycle": "#1A1614"
+                "car": "#F28B82",
+                "bus": "#64B5F6",
+                "truck": "#FFB74D",
+                "privatecar": "#7986CB",
+                "van": "#FFF176",
+                "special": "#BA68C8",
+                "motorcycle": "#81C784"
             };
 
             // Create scales
