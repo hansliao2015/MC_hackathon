@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vehicle Statistics Visualization</title>
+    <title>Interactive Vehicle Statistics Visualization</title>
     <style>
+        /* Previous styles remain the same */
         body {
             font-family: Arial, sans-serif;
             margin: 0;
@@ -31,29 +32,99 @@
             border: 1px solid #ddd;
             padding: 10px;
             pointer-events: none;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .controls {
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-bottom: 30px;
+            gap: 10px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 12px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            cursor: grab;
+            transition: all 0.3s ease;
+            position: relative;
+            background-color: white;
+        }
+
+        .legend-item:hover {
+            background-color: #f5f5f5;
+            border-color: #999;
+        }
+
+        .legend-item:active {
+            cursor: grabbing;
+        }
+
+        .legend-item::after {
+            content: "拖曳我";
+            position: absolute;
+            bottom: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 12px;
+            color: #666;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .legend-item:hover::after {
+            opacity: 1;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            margin-right: 8px;
+            border: 1px solid #ddd;
+        }
+
+        .legend-label {
+            user-select: none;
         }
 
         .hint-container {
             position: relative;
             display: inline-block;
-            margin-left: 10px;
+            margin-bottom: 10px;
         }
 
         .hint-icon {
             border-radius: 100%;
-            background-color: #ddd;
-            font-size: 36px;
+            background-color: #f0f0f0;
+            font-size: 20px;
             cursor: pointer;
+            padding: 10px 10px;
+            transition: background-color 0.3s ease;
+        }
+
+        .hint-icon:hover {
+            background-color: #e0e0e0;
         }
 
         .hint-tooltip {
             visibility: hidden;
             width: 200px;
-            background-color: #555;
+            background-color: #333;
             color: #fff;
             text-align: left;
             border-radius: 6px;
-            padding: 5px;
+            padding: 10px;
             position: absolute;
             z-index: 1;
             top: 125%;
@@ -67,27 +138,228 @@
             visibility: visible;
             opacity: 1;
         }
+
+        .inactive {
+            opacity: 0.5;
+        }
+
+        .inactive .legend-color {
+            opacity: 0.3;
+        }
     </style>
     <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.14.0/Sortable.min.js"></script>
 </head>
-
 <body>
-    <h1>Vehicle Statistics Visualization</h1>
-    <div class="controls">
-        <!-- <div class="hint-container">
-            <label>Hint: </label>
-            <span class="hint-icon">💡</span>
-            <span class="hint-tooltip">
-                <ol>
-                    <li>將滑鼠移到長條上可以看到詳細數據</li>
-                </ol>
-            </span>
-        </div> -->
+    <h1>新竹市機動車輛互動式圖表</h1>
+    <div class="hint-container">
+        <span class="hint-icon">💡</span>
+        <span class="hint-tooltip">
+            <ol>
+                <li>將滑鼠移到長條上可以看到詳細數據</li>
+                <li>拖動上方的圖例來改變車輛類型的堆疊順序</li>
+                <li>點擊圖例來顯示/隱藏特定車輛類型</li>
+            </ol>
+        </span>
     </div>
-
+    <div id="legend" class="legend"></div>
+    
     <div class="chart-container">
         <div id="chart"></div>
     </div>
-    SCRIPT
+
+    <script>
+        // Load the data
+        d3.csv("app/static/vehicle.csv").then(data => {
+            // Process and filter the data, excluding year 113
+            const processedData = data
+                .filter(d => !d['總計'].startsWith('113')) // Filter out data from year 113
+                .map(d => ({
+                    year: d['總計'],
+                    displayYear: d['總計'].replace(/^(\d+)年.*$/, '$1'),
+                    yearNumber: parseInt(d['總計'].match(/^(\d+)/)[1]),
+                    car: +d['汽車'].replace(/,/g, ''),
+                    bus: +d['大客車'].replace(/,/g, ''),
+                    truck: +d['大貨車'].replace(/,/g, ''),
+                    privatecar: +d['小客車'].replace(/,/g, ''),
+                    van: +d['小貨車'].replace(/,/g, ''),
+                    special: +d['特種車'].replace(/,/g, ''),
+                    motorcycle: +d['機車'].replace(/,/g, '')
+                })).sort((a, b) => a.yearNumber - b.yearNumber);
+
+            // Rest of the code remains the same
+            const combinedData = Array.from(d3.group(processedData, d => d.yearNumber))
+                .map(([year, values]) => {
+                    const combined = {
+                        displayYear: values[0].displayYear,
+                        yearNumber: year
+                    };
+                    ["car", "bus", "truck", "privatecar", "van", "special", "motorcycle"].forEach(type => {
+                        combined[type] = d3.sum(values, d => d[type]);
+                    });
+                    return combined;
+                });
+
+            const chartContainer = d3.select(".chart-container");
+            const containerWidth = chartContainer.node().getBoundingClientRect().width;
+
+            const margin = { top: 40, right: 20, bottom: 70, left: 80 };
+            const width = containerWidth - margin.left - margin.right;
+            const height = 600 - margin.top - margin.bottom;
+
+            // Create SVG
+            const svg = d3.select("#chart")
+                .append("svg")
+                .attr("width", width + margin.left + margin.right)
+                .attr("height", height + margin.top + margin.bottom)
+                .append("g")
+                .attr("transform", `translate(${margin.left},${margin.top})`);
+
+            // Define color mapping with default order
+            const defaultOrder = ["car", "bus", "truck", "privatecar", "van", "special", "motorcycle"];
+            const colorMapping = {
+                "car": "#F28B82",
+                "bus": "#64B5F6",
+                "truck": "#FFB74D",
+                "privatecar": "#7986CB",
+                "van": "#FFF176",
+                "special": "#BA68C8",
+                "motorcycle": "#81C784"
+            };
+
+            // Create scales
+            const x = d3.scaleBand().range([0, width]).padding(0.1);
+            const y = d3.scaleLinear().range([height, 0]);
+
+            // Create axes
+            const xAxis = svg.append("g")
+                .attr("transform", `translate(0,${height})`);
+            const yAxis = svg.append("g");
+
+            // Add axis labels
+            svg.append("text")
+                .attr("transform", `translate(${width / 2},${height + margin.bottom - 10})`)
+                .style("text-anchor", "middle")
+                .text("年份");
+
+            svg.append("text")
+                .attr("transform", "rotate(-90)")
+                .attr("y", 0 - margin.left)
+                .attr("x", 0 - (height / 2))
+                .attr("dy", "1em")
+                .style("text-anchor", "middle")
+                .text("數量");
+
+            // Create tooltip
+            const tooltip = d3.select("body").append("div")
+                .attr("class", "tooltip")
+                .style("opacity", 0);
+
+            // Helper function for Chinese labels
+            function getChineseLabel(key) {
+                const labels = {
+                    "car": "汽車",
+                    "bus": "大客車",
+                    "truck": "大貨車",
+                    "privatecar": "小客車",
+                    "van": "小貨車",
+                    "special": "特種車",
+                    "motorcycle": "機車"
+                };
+                return labels[key];
+            }
+
+            // Create legend
+            const legend = d3.select("#legend");
+            defaultOrder.forEach(type => {
+                const legendItem = legend.append("div")
+                    .attr("class", "legend-item")
+                    .attr("data-id", type);
+                legendItem.append("div")
+                    .attr("class", "legend-color")
+                    .style("background-color", colorMapping[type]);
+                legendItem.append("span")
+                    .attr("class", "legend-label")
+                    .text(getChineseLabel(type));
+            });
+
+            // Make legend sortable
+            new Sortable(legend.node(), {
+                animation: 150,
+                ghostClass: 'blue-background-class',
+                onEnd: function (evt) {
+                    updateChart();
+                },
+            });
+
+            // Function to update the chart
+            function updateChart() {
+                const selectedTypes = Array.from(legend.selectAll('.legend-item'))
+                    .filter(item => !d3.select(item).classed('inactive'))
+                    .map(item => d3.select(item).attr('data-id'));
+
+                // Set domains
+                x.domain(combinedData.map(d => d.displayYear));
+                const maxTotal = d3.max(combinedData, d =>
+                    selectedTypes.reduce((sum, key) => sum + d[key], 0)
+                );
+                y.domain([0, maxTotal]);
+
+                // Update axes
+                xAxis.transition().duration(1000).call(d3.axisBottom(x));
+                yAxis.transition().duration(1000).call(d3.axisLeft(y));
+
+                // Stack the data
+                const stackedData = d3.stack()
+                    .keys(selectedTypes)(combinedData);
+
+                // Create and update bars
+                const bars = svg.selectAll(".bar")
+                    .data(stackedData)
+                    .join("g")
+                    .attr("class", "bar")
+                    .attr("fill", d => colorMapping[d.key]);
+
+                bars.selectAll("rect")
+                    .data(d => d)
+                    .join("rect")
+                    .transition()
+                    .duration(1000)
+                    .attr("x", d => x(d.data.displayYear))
+                    .attr("y", d => y(d[1]))
+                    .attr("height", d => y(d[0]) - y(d[1]))
+                    .attr("width", x.bandwidth());
+
+                // Add interactivity
+                bars.selectAll("rect")
+                    .on("mouseover", function (event, d) {
+                        const category = d3.select(this.parentNode).datum().key;
+                        const value = d[1] - d[0];
+                        tooltip.transition()
+                            .duration(200)
+                            .style("opacity", .9);
+                        tooltip.html(`${d.data.displayYear}年<br>${getChineseLabel(category)}: ${value.toLocaleString()}`)
+                            .style("left", (event.pageX + 10) + "px")
+                            .style("top", (event.pageY - 28) + "px");
+                    })
+                    .on("mouseout", function (d) {
+                        tooltip.transition()
+                            .duration(500)
+                            .style("opacity", 0);
+                    });
+            }
+
+            // Add click event to legend items to toggle visibility
+            legend.selectAll('.legend-item').on('click', function() {
+                const item = d3.select(this);
+                const isActive = !item.classed('inactive');
+                item.classed('inactive', isActive);
+                updateChart();
+            });
+
+            // Initial chart render
+            updateChart();
+        });
+    </script>
 </body>
 </html>
