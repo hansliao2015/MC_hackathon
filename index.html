@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vehicle Statistics Visualization</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .chart-container {
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        #chart {
+            width: 100%;
+            height: 600px;
+        }
+
+        .tooltip {
+            position: absolute;
+            background-color: rgba(255, 255, 255, 0.9);
+            border: 1px solid #ddd;
+            padding: 10px;
+            pointer-events: none;
+        }
+
+        .hint-container {
+            position: relative;
+            display: inline-block;
+            margin-left: 10px;
+        }
+
+        .hint-icon {
+            border-radius: 100%;
+            background-color: #ddd;
+            font-size: 36px;
+            cursor: pointer;
+        }
+
+        .hint-tooltip {
+            visibility: hidden;
+            width: 200px;
+            background-color: #555;
+            color: #fff;
+            text-align: left;
+            border-radius: 6px;
+            padding: 5px;
+            position: absolute;
+            z-index: 1;
+            top: 125%;
+            left: 50%;
+            margin-left: -100px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .hint-container:hover .hint-tooltip {
+            visibility: visible;
+            opacity: 1;
+        }
+    </style>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+</head>
+
+<body>
+    <h1>Vehicle Statistics Visualization</h1>
+    <div class="controls">
+        <!-- <div class="hint-container">
+            <label>Hint: </label>
+            <span class="hint-icon">💡</span>
+            <span class="hint-tooltip">
+                <ol>
+                    <li>將滑鼠移到長條上可以看到詳細數據</li>
+                </ol>
+            </span>
+        </div> -->
+    </div>
+
+    <div class="chart-container">
+        <div id="chart"></div>
+    </div>
+    SCRIPT
+</body>
+</html>
