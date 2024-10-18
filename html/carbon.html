@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Vehicle Emissions Visualization</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .chart-container {
+            width: 100%;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        #chart {
+            width: 100%;
+            height: 600px;
+        }
+
+        .tooltip {
+            position: absolute;
+            background-color: rgba(255, 255, 255, 0.9);
+            border: 1px solid #ddd;
+            padding: 10px;
+            pointer-events: none;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .controls {
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .legend {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-bottom: 30px;
+            gap: 10px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            padding: 8px 12px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+            cursor: grab;
+            transition: all 0.3s ease;
+            position: relative;
+            background-color: white;
+        }
+
+        .legend-item:hover {
+            background-color: #f5f5f5;
+            border-color: #999;
+        }
+
+        .legend-item:active {
+            cursor: grabbing;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            margin-right: 8px;
+            border: 1px solid #ddd;
+        }
+
+        .legend-label {
+            user-select: none;
+        }
+
+        .hint-container {
+            position: relative;
+            display: inline-block;
+            margin-bottom: 10px;
+        }
+
+        .hint-icon {
+            border-radius: 100%;
+            background-color: #f0f0f0;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 10px 10px;
+            transition: background-color 0.3s ease;
+        }
+
+        .hint-tooltip {
+            visibility: hidden;
+            width: 200px;
+            background-color: #333;
+            color: #fff;
+            text-align: left;
+            border-radius: 6px;
+            padding: 10px;
+            position: absolute;
+            z-index: 1;
+            top: 125%;
+            left: 50%;
+            margin-left: -100px;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        .hint-container:hover .hint-tooltip {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        .inactive {
+            opacity: 0.5;
+        }
+
+        .inactive .legend-color {
+            opacity: 0.3;
+        }
+    </style>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.14.0/Sortable.min.js"></script>
+</head>
+<body>
+    <h1>新竹市機動車輛碳排放貢獻比例互動式圖表</h1>
+    <div class="hint-container">
+        <span class="hint-icon">💡</span>
+        <span class="hint-tooltip">
+            <ol>
+                <li>將滑鼠移到長條上可以看到詳細數據</li>
+                <li>拖動上方的圖例來改變車輛類型的堆疊順序</li>
+                <li>點擊圖例來顯示/隱藏特定車輛類型</li>
+            </ol>
+        </span>
+    </div>
+    <div id="legend" class="legend"></div>
+    
+    <div class="chart-container">
+        <div id="chart"></div>
+    </div>
+
+    <script>
+        // Load the data
+        d3.csv("app/static/vehicle.csv").then(data => {
+            // Define emission factors
+            const emissionFactors = {
+                "motorcycle": 0.8209,
+                "car": 1,
+                "bus": 1.9705,
+                "truck": 2.6404,
+                "van": 1.8503
+            };
+
+            // Process and filter the data, excluding year 113
+            const processedData = data
+                .filter(d => !d['總計'].startsWith('113'))
+                .map(d => ({
+                    year: d['總計'],
+                    displayYear: d['總計'].replace(/^(\d+)年.*$/, '$1'),
+                    yearNumber: parseInt(d['總計'].match(/^(\d+)/)[1]),
+                    motorcycle: +d['機車'].replace(/,/g, '') * emissionFactors.motorcycle,
+                    car: +d['汽車'].replace(/,/g, '') * emissionFactors.car,
+                    bus: +d['大客車'].replace(/,/g, '') * emissionFactors.bus,
+                    truck: +d['大貨車'].replace(/,/g, '') * emissionFactors.truck,
+                    van: +d['小貨車'].replace(/,/g, '') * emissionFactors.van
+                })).sort((a, b) => a.yearNumber - b.yearNumber);
+
+            // Find base year (92) total
+            const baseYearData = processedData.find(d => d.yearNumber === 92);
+            const baseYearTotal = Object.keys(emissionFactors).reduce((sum, key) => sum + baseYearData[key], 0);
+
+            // Calculate percentages relative to base year
+            const combinedData = processedData.map(d => {
+                const combined = {
+                    displayYear: d.displayYear,
+                    yearNumber: d.yearNumber
+                };
+                Object.keys(emissionFactors).forEach(type => {
+                    combined[type] = (d[type] / baseYearTotal) * 100;
+                });
+                return combined;
+            });
+
+            const chartContainer = d3.select(".chart-container");
+            const containerWidth = chartContainer.node().getBoundingClientRect().width;
+
+            const margin = { top: 40, right: 20, bottom: 70, left: 80 };
+            const width = containerWidth - margin.left - margin.right;
+            const height = 600 - margin.top - margin.bottom;
+
+            // Create SVG
+            const svg = d3.select("#chart")
+                .append("svg")
+                .attr("width", width + margin.left + margin.right)
+                .attr("height", height + margin.top + margin.bottom)
+                .append("g")
+                .attr("transform", `translate(${margin.left},${margin.top})`);
+
+            // Define color mapping with default order
+            const defaultOrder = ["motorcycle", "car", "bus", "truck", "van"];
+            const colorMapping = {
+                "motorcycle": "#81C784",
+                "car": "#F28B82",
+                "bus": "#64B5F6",
+                "truck": "#FFB74D",
+                "van": "#FFF176"
+            };
+
+            // Create scales
+            const x = d3.scaleBand().range([0, width]).padding(0.1);
+            const y = d3.scaleLinear().range([height, 0]);
+
+            // Create axes
+            const xAxis = svg.append("g")
+                .attr("transform", `translate(0,${height})`);
+            const yAxis = svg.append("g");
+
+            // Add axis labels
+            svg.append("text")
+                .attr("transform", `translate(${width / 2},${height + margin.bottom - 10})`)
+                .style("text-anchor", "middle")
+                .text("年份");
+
+            svg.append("text")
+                .attr("transform", "rotate(-90)")
+                .attr("y", 0 - margin.left)
+                .attr("x", 0 - (height / 2))
+                .attr("dy", "1em")
+                .style("text-anchor", "middle")
+                .text("碳排放貢獻比例 (%)");
+
+            // Create tooltip
+            const tooltip = d3.select("body").append("div")
+                .attr("class", "tooltip")
+                .style("opacity", 0);
+
+            // Helper function for Chinese labels
+            function getChineseLabel(key) {
+                const labels = {
+                    "motorcycle": "機車",
+                    "car": "汽車",
+                    "bus": "大客車",
+                    "truck": "大貨車",
+                    "van": "小貨車"
+                };
+                return labels[key];
+            }
+
+            // Create legend
+            const legend = d3.select("#legend");
+            defaultOrder.forEach(type => {
+                const legendItem = legend.append("div")
+                    .attr("class", "legend-item")
+                    .attr("data-id", type);
+                legendItem.append("div")
+                    .attr("class", "legend-color")
+                    .style("background-color", colorMapping[type]);
+                legendItem.append("span")
+                    .attr("class", "legend-label")
+                    .text(getChineseLabel(type));
+            });
+
+            // Make legend sortable
+            new Sortable(legend.node(), {
+                animation: 150,
+                ghostClass: 'blue-background-class',
+                onEnd: function (evt) {
+                    updateChart();
+                },
+            });
+
+            function normalizeData(data, selectedTypes) {
+                return data.map(yearData => {
+                    const yearTotal = selectedTypes.reduce((sum, type) => sum + yearData[type], 0);
+                    const normalizedData = { ...yearData };
+                    
+                    if (yearData.yearNumber === 92) {
+                        // For base year, make selected types sum to 100%
+                        const scaleFactor = 100 / yearTotal;
+                        selectedTypes.forEach(type => {
+                            normalizedData[type] = yearData[type] * scaleFactor;
+                        });
+                    } else {
+                        // For other years, maintain relative proportions to base year
+                        const baseYearTotal = selectedTypes.reduce((sum, type) => 
+                            sum + data.find(d => d.yearNumber === 92)[type], 0);
+                        const scaleFactor = 100 / baseYearTotal;
+                        selectedTypes.forEach(type => {
+                            normalizedData[type] = yearData[type] * scaleFactor;
+                        });
+                    }
+                    return normalizedData;
+                });
+            }
+
+            // Function to update the chart
+            function updateChart() {
+                const selectedTypes = Array.from(legend.selectAll('.legend-item'))
+                    .filter(item => !d3.select(item).classed('inactive'))
+                    .map(item => d3.select(item).attr('data-id'));
+
+                const normalizedData = normalizeData(combinedData, selectedTypes);
+
+                // Set domains
+                x.domain(normalizedData.map(d => d.displayYear));
+                const maxTotal = d3.max(normalizedData, d =>
+                    selectedTypes.reduce((sum, key) => sum + d[key], 0)
+                );
+                y.domain([0, maxTotal]);
+
+                // Update axes
+                xAxis.transition().duration(1000).call(d3.axisBottom(x));
+                yAxis.transition().duration(1000).call(d3.axisLeft(y));
+
+                // Stack the data
+                const stackedData = d3.stack()
+                    .keys(selectedTypes)(normalizedData);
+
+                // Create and update bars
+                const bars = svg.selectAll(".bar")
+                    .data(stackedData)
+                    .join("g")
+                    .attr("class", "bar")
+                    .attr("fill", d => colorMapping[d.key]);
+
+                // Update existing bars with smooth height transition
+                bars.selectAll("rect")
+                    .data(d => d)
+                    .join("rect")
+                    .attr("x", d => x(d.data.displayYear))
+                    .attr("width", x.bandwidth())
+                    .transition()
+                    .duration(1000)
+                    .attr("y", d => y(d[1]))
+                    .attr("height", d => y(d[0]) - y(d[1]));
+
+                // Add interactivity
+                bars.selectAll("rect")
+                    .on("mouseover", function (event, d) {
+                        const category = d3.select(this.parentNode).datum().key;
+                        const value = d[1] - d[0];
+                        const percentage = value.toFixed(2);
+                        tooltip.transition()
+                            .duration(200)
+                            .style("opacity", .9);
+                        tooltip.html(`${d.data.displayYear}年<br>${getChineseLabel(category)}: ${percentage}%`)
+                            .style("left", (event.pageX + 10) + "px")
+                            .style("top", (event.pageY - 28) + "px");
+                    })
+                    .on("mouseout", function (d) {
+                        tooltip.transition()
+                            .duration(500)
+                            .style("opacity", 0);
+                    });
+            }
+
+            // Add click event to legend items to toggle visibility
+            legend.selectAll('.legend-item').on('click', function() {
+                const item = d3.select(this);
+                const isActive = !item.classed('inactive');
+                item.classed('inactive', isActive);
+                updateChart();
+            });
+
+            // Initial chart render
+            updateChart();
+        });
+    </script>
+</body>
+</html>
