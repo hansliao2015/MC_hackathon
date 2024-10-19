@@ -145,14 +145,14 @@
         .style("text-anchor", "middle")
         .text("速度 (km/h)");
 
-      // 添加y軸標籤
+      // 添加y軸標籤（更新的部分）
       svg.append("text")
         .attr("class", "axis-label")
         .attr("transform", "rotate(-90)")
         .attr("x", -height / 2)
         .attr("y", -margin.left + 15)
         .style("text-anchor", "middle")
-        .text("碳排放係數");
+        .text("碳排放係數 (g/km)");
 
       // 為每種車輛類型創建一條線
       Object.keys(colorMapping).forEach(vehicle => {
