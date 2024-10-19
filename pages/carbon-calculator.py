@@ -27,7 +27,23 @@ default_capacity = {
     "公車": 40
 }
 
-st.title('兩兩車種碳排放比較')
+st.set_page_config(page_title="碳排放計算器", layout="wide")
+
+# 使用CSS美化界面
+st.markdown("""
+    <style>
+    .savings {
+        font-size:42px !important;
+        color: #2ecc71;
+        padding: 50px 20px;
+        border-radius: 10px;
+        background-color: #f0f8f1;
+        margin-bottom: 50px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+st.title('碳排放比較')
 
 # 創建兩列來放置下拉選單
 col1, col2 = st.columns(2)
@@ -75,49 +91,74 @@ with col4:
 # 路程輸入
 distance = st.number_input('輸入行駛路程（公里）', min_value=1, value=10, key="distance_input")
 
-# 計算總碳排放和人均碳排放
-total_emission_1 = carbon_factor_1 * distance
-total_emission_2 = carbon_factor_2 * distance
+# 添加計算按鈕
+if st.button('計算碳排放量', type='primary'):
+    # 計算總碳排放和人均碳排放
+    total_emission_1 = carbon_factor_1 * distance
+    total_emission_2 = carbon_factor_2 * distance
 
-per_person_emission_1 = total_emission_1 / passengers_1
-per_person_emission_2 = total_emission_2 / passengers_2
+    per_person_emission_1 = total_emission_1 / passengers_1
+    per_person_emission_2 = total_emission_2 / passengers_2
 
-# 顯示結果
-st.write(f'{vehicle_1} 的總碳排放: {total_emission_1:.2f} kg CO2, {vehicle_1} 的人均碳排放: {per_person_emission_1:.2f} kg CO2/人')
-st.write(f'{vehicle_2} 的總碳排放: {total_emission_2:.2f} kg CO2, {vehicle_2} 的人均碳排放: {per_person_emission_2:.2f} kg CO2/人')
+    # 使用容器來組織結果顯示
+    with st.container():
+        # col_results1, col_results2 = st.columns(2)
+        
+        # with col_results1:
+        #     st.markdown(f"### {vehicle_1} 碳排放")
+        #     st.markdown(f"<div class='big-font'>總碳排放: {total_emission_1:.2f} kg CO₂</div>", unsafe_allow_html=True)
+        #     st.markdown(f"<div class='big-font'>人均碳排放: {per_person_emission_1:.2f} kg CO₂/人</div>", unsafe_allow_html=True)
 
-# 顯示較低碳排放的選擇（基於人均碳排放）
-if per_person_emission_1 > per_person_emission_2:
-    st.write(f'改用 {vehicle_2} 每人可節省碳排放: {(per_person_emission_1 - per_person_emission_2):.2f} kg CO2')
-else:
-    st.write(f'改用 {vehicle_1} 每人可節省碳排放: {(per_person_emission_2 - per_person_emission_1):.2f} kg CO2')
+        # with col_results2:
+        #     st.markdown(f"### {vehicle_2} 碳排放")
+        #     st.markdown(f"<div class='big-font'>總碳排放: {total_emission_2:.2f} kg CO₂</div>", unsafe_allow_html=True)
+        #     st.markdown(f"<div class='big-font'>人均碳排放: {per_person_emission_2:.2f} kg CO₂/人</div>", unsafe_allow_html=True)
 
-# 創建條形圖來比較兩車種的人均碳排放
-df_bar = pd.DataFrame({
-    'Vehicle': [f'{vehicle_1}\n({passengers_1}人)', f'{vehicle_2}\n({passengers_2}人)'],
-    'Per Person Emissions': [per_person_emission_1, per_person_emission_2]
-})
-bar_chart = alt.Chart(df_bar).mark_bar().encode(
-    x='Vehicle',
-    y='Per Person Emissions'
-).properties(title='人均碳排放比較')
-st.altair_chart(bar_chart, use_container_width=True)
+        # 顯示節省的碳排放量
+        # st.markdown("---")
+        if per_person_emission_1 > per_person_emission_2:
+            saved = per_person_emission_1 - per_person_emission_2
+            st.markdown(f"<div class='savings'>🌱 換乘{vehicle_2}每人可節省 {saved:.2f} kg CO₂</div>", unsafe_allow_html=True)
+        else:
+            saved = per_person_emission_2 - per_person_emission_1
+            st.markdown(f"<div class='savings'>🌱 換乘{vehicle_1}每人可節省 {saved:.2f} kg CO₂</div>", unsafe_allow_html=True)
 
-# 創建折線圖來展示隨路程變化的人均碳排放量
-distances = np.arange(1, 101)
-emissions_1 = (carbon_factor_1 * distances) / passengers_1
-emissions_2 = (carbon_factor_2 * distances) / passengers_2
-df_line = pd.DataFrame({
-    'Distance (km)': distances,
-    f'{vehicle_1} ({passengers_1}人)': emissions_1,
-    f'{vehicle_2} ({passengers_2}人)': emissions_2
-})
-line_chart = alt.Chart(df_line).transform_fold(
-    [f'{vehicle_1} ({passengers_1}人)', f'{vehicle_2} ({passengers_2}人)'],
-    as_=['Vehicle', 'Emissions']
-).mark_line().encode(
-    x='Distance (km):Q',
-    y='Emissions:Q',
-    color='Vehicle:N'
-).properties(title='隨路程變化的人均碳排放比較')
-st.altair_chart(line_chart, use_container_width=True)
+        # 創建條形圖來比較兩車種的人均碳排放
+        df_bar = pd.DataFrame({
+            'Vehicle': [f'{vehicle_1}\n({passengers_1}人)', f'{vehicle_2}\n({passengers_2}人)'],
+            'Per Person Emissions': [per_person_emission_1, per_person_emission_2]
+        })
+        
+        bar_chart = alt.Chart(df_bar).mark_bar().encode(
+            x='Vehicle',
+            y='Per Person Emissions',
+            color=alt.Color('Vehicle', scale=alt.Scale(scheme='category10'))
+        ).properties(
+            title='人均碳排放比較',
+            height=300
+        )
+        st.altair_chart(bar_chart, use_container_width=True)
+
+        # 創建折線圖來展示隨路程變化的人均碳排放量
+        distances = np.arange(1, 101)
+        emissions_1 = (carbon_factor_1 * distances) / passengers_1
+        emissions_2 = (carbon_factor_2 * distances) / passengers_2
+        
+        df_line = pd.DataFrame({
+            'Distance (km)': distances,
+            f'{vehicle_1} ({passengers_1}人)': emissions_1,
+            f'{vehicle_2} ({passengers_2}人)': emissions_2
+        })
+        
+        line_chart = alt.Chart(df_line).transform_fold(
+            [f'{vehicle_1} ({passengers_1}人)', f'{vehicle_2} ({passengers_2}人)'],
+            as_=['Vehicle', 'Emissions']
+        ).mark_line().encode(
+            x='Distance (km):Q',
+            y='Emissions:Q',
+            color='Vehicle:N'
+        ).properties(
+            title='隨路程變化的人均碳排放比較',
+            height=300
+        )
+        st.altair_chart(line_chart, use_container_width=True)
